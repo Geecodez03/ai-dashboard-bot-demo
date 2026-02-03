@@ -1,0 +1,75 @@
+﻿from flask import Flask, request, jsonify, send_from_directory
+
+import os
+
+FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
+from flask_cors import CORS
+
+import os
+
+FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
+import logging
+import uuid
+import os
+import time
+import sqlite3
+import json
+
+from .ai_agent import run_agent
+
+DB_PATH = os.getenv("DB_PATH", os.path.join(os.path.dirname(__file__), "data.db"))
+
+def db_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    with db_conn() as conn:
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL DEFAULT (datetime('now')),
+            kind TEXT NOT NULL,
+            request_id TEXT,
+            latency_ms INTEGER,
+            input_json TEXT,
+            output_json TEXT
+        )
+        """)
+        conn.commit()
+
+def add_history(kind: str, request_id: str, latency_ms: int, input_obj: dict, output_obj: dict):
+    try:
+        with db_conn() as conn:
+            conn.execute(
+                "INSERT INTO history(kind, request_id, latency_ms, input_json, output_json) VALUES (?, ?, ?, ?, ?)",
+                (kind, request_id, latency_ms, json.dumps(input_obj, ensure_ascii=False), json.dumps(output_obj, ensure_ascii=False)),
+            )
+            conn.commit()
+    except Exception:
+        # Never break the API because history logging failed
+        logging.exception("Failed to write history")
+
+def create_app():
+    app = Flask(__name__)
+    CORS(app)
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+    init_db()
+
+    @app.before_request
+    def add_request_id():
+        request.request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+
+    @app.after_request
+    def attach_request_id_header(response):
+        response.headers["X-Request-ID"] = getattr(request, "request_id", "")
+        return response
+
+    @app.route("/", methods=["GET"])
+def home():
+    # Serve the static dashboard
+    return send_from_directory(FRONTEND_DIR, "index.html")
+

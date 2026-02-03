@@ -1,0 +1,9 @@
+﻿__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+backend/.venv/
+.git/
+.vscode/
+data.db
