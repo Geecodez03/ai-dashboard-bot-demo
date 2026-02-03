@@ -5,3 +5,8 @@ backend/data.db
 backend/.venv/
 .pytest_cache/
 __pycache__/
+data.db
+backend/data.db
+backend/.venv/
+.pytest_cache/
+__pycache__/
