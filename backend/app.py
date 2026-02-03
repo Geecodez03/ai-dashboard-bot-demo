@@ -91,6 +91,28 @@ def create_app():
     def history():
         limit = int(request.args.get("limit", 20))
         return jsonify({"items": get_history(limit)})
+    @app.route("/api/info", methods=["GET"])
+    def info():
+        return jsonify({
+            "name": "AI Dashboard Bot Demo",
+            "live_url": "https://ai-dashboard-bot-demo.onrender.com",
+            "features": [
+                "Flask API with JSON endpoints",
+                "AI ask endpoint with demo-mode fallback",
+                "Automation workflow endpoint (risk -> decision)",
+                "Audit/history endpoint for dashboard + observability"
+            ],
+            "endpoints": [
+                "GET /",
+                "GET /health",
+                "GET /api/info",
+                "POST /api/ask",
+                "POST /api/workflow/demo",
+                "GET /api/history?limit=N"
+            ],
+            "stack": ["Python", "Flask", "Gunicorn", "Render", "OpenAI API (optional)"]
+        })
+
 
     return app
 
@@ -98,3 +120,4 @@ def create_app():
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True)
+
