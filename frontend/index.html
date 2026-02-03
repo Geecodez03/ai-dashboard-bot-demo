@@ -476,7 +476,9 @@ async function refreshHistory(){
 async function clearHistory(){
   try{
     try {
-      const r = await fetch(API + "/api/history/clear", { method: "POST" });
+      const r =   // UI-only clear (backend has no clear endpoint)
+  historyItems = [];
+  renderHistory();
       if (!r.ok) throw new Error("no clear endpoint");
     } catch (e) {
       // fallback: clear only the UI if backend doesn't support clear
@@ -530,6 +532,7 @@ setInterval(refreshHistory, 7000);
 </script>
 </body>
 </html>
+
 
 
 
