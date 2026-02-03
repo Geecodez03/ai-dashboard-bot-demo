@@ -1,29 +1,43 @@
 ﻿import os
-from dotenv import load_dotenv
+import uuid
 
-load_dotenv()
+def run_agent(question: str) -> dict:
+    """
+    Always returns a dict:
+      { "answer": "...", "request_id": "..." or None }
+    Falls back to demo mode when OPENAI_API_KEY is missing.
+    """
+    key = os.getenv("OPENAI_API_KEY", "").strip()
 
-USE_MOCK = os.getenv("USE_MOCK_AI", "false").lower() == "true"
+    # Demo mode (no key, placeholder, or obvious test)
+    if (not key) or key.lower() in ("test", "changeme") or key.startswith("sk-") is False:
+        return {
+            "answer": (
+                "DEMO MODE (no OPENAI_API_KEY set).\n\n"
+                "This endpoint proves:\n"
+                "- A frontend can call a backend API and render dashboard-ready JSON\n"
+                "- The backend can run automation logic + log history for audit\n"
+                "- The system is deployable and production-shaped (gunicorn, env vars, routes)\n\n"
+                f"Question received: {question}"
+            ),
+            "request_id": None,
+        }
 
-def run_agent(user_input: str) -> str:
-    if USE_MOCK:
-        return (
-            "Mock AI response (USE_MOCK_AI=true):\n"
-            "- Demonstrates AI-powered API design\n"
-            "- Safe to run without external calls\n"
-            "- Same architecture as production"
+    # Real AI call (keep it minimal + compatible)
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=key)
+
+        resp = client.responses.create(
+            model="gpt-4.1-mini",
+            input=question
         )
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key or api_key.strip() in ("PASTE_YOUR_REAL_KEY_HERE", ""):
-        raise RuntimeError("OPENAI_API_KEY is missing or still set to placeholder. Edit backend/.env locally.")
+        text = getattr(resp, "output_text", None) or str(resp)
+        return {"answer": text, "request_id": str(uuid.uuid4())}
 
-    # Import here so mock mode works even without openai installed
-    from openai import OpenAI
-    client = OpenAI(api_key=api_key)
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": user_input}],
-    )
-    return response.choices[0].message.content
+    except Exception as e:
+        return {
+            "answer": f"AI call failed (fallback response). Error: {type(e).__name__}: {e}",
+            "request_id": None
+        }
