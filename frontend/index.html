@@ -251,7 +251,7 @@
   const isAlreadyApi = window.location.port === "5000";
   if (isLocalhost && !isAlreadyApi) return "http://127.0.0.1:5000";
   return ""; // deployed or already on API origin -> use relative URLs
-})();const API = "API_BASE_URL";
+})();const API = API_BASE_URL;
 let HISTORY_CACHE = [];
 
 function toast(msg){
@@ -524,5 +524,6 @@ setInterval(refreshHistory, 7000);
 </script>
 </body>
 </html>
+
 
 
