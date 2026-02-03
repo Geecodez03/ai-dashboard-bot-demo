@@ -113,6 +113,12 @@ def create_app():
             "stack": ["Python", "Flask", "Gunicorn", "Render", "OpenAI API (optional)"]
         })
 
+    @app.route("/api/history/clear", methods=["POST"])
+    def clear_history():
+        from backend.store import clear_events
+        clear_events()
+        return jsonify({"ok": True})
+
 
     return app
 

@@ -1,4 +1,9 @@
-﻿import os
+﻿def clear_events():
+    conn = _conn()
+    conn.execute("DELETE FROM events")
+    conn.commit()
+    conn.close()
+import os
 import json
 import sqlite3
 from datetime import datetime
