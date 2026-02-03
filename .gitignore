@@ -1,2 +1,7 @@
 .env
 backend/data.db
+data.db
+backend/data.db
+backend/.venv/
+.pytest_cache/
+__pycache__/
