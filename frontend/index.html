@@ -246,11 +246,12 @@
   <div class="toast" id="toast"></div>
 
 <script>
-  const API_BASE_URL =
-    window.location.hostname === "localhost"
-      ? "http://127.0.0.1:5000"
-      : window.location.origin;
-const API = "API_BASE_URL";
+  const API_BASE_URL = (() => {
+  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  const isAlreadyApi = window.location.port === "5000";
+  if (isLocalhost && !isAlreadyApi) return "http://127.0.0.1:5000";
+  return ""; // deployed or already on API origin -> use relative URLs
+})();const API = "API_BASE_URL";
 let HISTORY_CACHE = [];
 
 function toast(msg){
@@ -523,4 +524,5 @@ setInterval(refreshHistory, 7000);
 </script>
 </body>
 </html>
+
 
