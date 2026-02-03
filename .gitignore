@@ -10,3 +10,5 @@ backend/data.db
 backend/.venv/
 .pytest_cache/
 __pycache__/
+*.bak
+*.bak

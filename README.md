@@ -1,11 +1,23 @@
-AI Dashboard Bot – Demo Project
+ï»¿# AI Dashboard Bot Demo
 
-This project demonstrates how I design and implement AI-powered automation services.
+Live demo: https://ai-dashboard-bot-demo.onrender.com
 
-What it shows:
-- LLM integration exposed through clean REST APIs
-- Automation workflows with optional AI explanations
-- Dashboard-ready JSON responses
-- Environment-based configuration and safe secret handling
+## What this shows employers
+- Build + deploy a full-stack demo (frontend + API) that returns dashboard-ready JSON
+- AI integration with safe fallbacks (demo mode when no key is present)
+- Automation workflow logic + audit/history logging
 
-Designed to mirror production patterns used in AI/automation roles.
+## Endpoints
+- GET /health
+- GET /api/info
+- POST /api/ask
+- POST /api/workflow/demo
+- GET /api/history?limit=10
+
+## Quick tests (PowerShell)
+
+```powershell
+$u="https://ai-dashboard-bot-demo.onrender.com"
+Invoke-RestMethod "$u/health"
+Invoke-RestMethod "$u/api/info"
+Invoke-RestMethod -Method Post -Uri "$u/api/ask" -ContentType "application/json" -Body '{"question":"Give 3 bullets explaining this demo."}'
