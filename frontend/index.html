@@ -31,6 +31,13 @@
     .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;background:rgba(148,163,184,.10);border:1px solid var(--border);color:var(--muted);font-size:12px}
     .dot{width:8px;height:8px;border-radius:999px;background:var(--warn)}
     .dot.ok{background:var(--good)} .dot.bad{background:var(--bad)}
+    .alert{margin:10px 0 14px;padding:10px 12px;border-radius:14px;border:1px solid var(--border);background:rgba(148,163,184,.10);font-size:12px;color:var(--muted)}
+    .alert.warn{border-color:rgba(251,191,36,.35);color:rgba(253,230,138,.98);background:rgba(251,191,36,.10)}
+    .metricRow{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+    @media (max-width:980px){.metricRow{grid-template-columns:repeat(2,minmax(120px,1fr))}}
+    .metric{padding:10px 12px;border-radius:14px;border:1px solid var(--border);background:rgba(148,163,184,.08)}
+    .metricLabel{font-size:11px;color:var(--muted)}
+    .metricValue{font-size:18px;font-weight:700;margin-top:4px}
     .grid{display:grid;gap:16px;grid-template-columns:1.15fr .85fr;align-items:start}
     @media (max-width:980px){.grid{grid-template-columns:1fr}}
 
@@ -108,6 +115,15 @@
       </div>
     </div>
 
+    <div id="riskAlert" class="alert">Automation alert: Normal activity.</div>
+
+    <div class="metricRow">
+      <div class="metric"><div class="metricLabel">Requests / min</div><div id="mRpm" class="metricValue mono">0</div></div>
+      <div class="metric"><div class="metricLabel">Avg latency (last 20)</div><div id="mLatency" class="metricValue mono">0 ms</div></div>
+      <div class="metric"><div class="metricLabel">Error rate (last 20)</div><div id="mErr" class="metricValue mono">0%</div></div>
+      <div class="metric"><div class="metricLabel">High-risk workflows (last 20)</div><div id="mHigh" class="metricValue mono">0</div></div>
+    </div>
+
     <div class="grid">
       <!-- LEFT -->
       <div class="card">
@@ -182,6 +198,14 @@
             <button class="ghost" onclick="toggleView('wf')">Toggle JSON/Pretty</button>
           </div>
 
+          <div class="btnbar" style="margin-top:10px">
+            <input id="autoEvery" type="number" min="2" value="10" style="max-width:140px"/>
+            <input id="autoMax" type="number" min="1" value="12" style="max-width:140px"/>
+            <button id="autoBtn" class="small" onclick="toggleAutoRun()">Start Auto Run</button>
+            <div class="kv">Auto status: <span class="mono" id="autoState">off</span></div>
+            <div class="kv">Runs: <span class="mono" id="autoCount">0/0</span></div>
+          </div>
+
           <div class="meta">
             <div class="kv">Latency: <span class="mono" id="wfMs">—</span></div>
             <div class="kv">Request ID: <span class="mono" id="wfReq">—</span></div>
@@ -249,10 +273,18 @@
   const API_BASE_URL = (() => {
   const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
   const isAlreadyApi = window.location.port === "5000";
-  if (isLocalhost && !isAlreadyApi) return "http://<span id="apiBase"></span>";
+  if (isLocalhost && !isAlreadyApi) return "http://127.0.0.1:5000";
   return ""; // deployed or already on API origin -> use relative URLs
-})();const API = API_BASE_URL;
+})();
+const API = API_BASE_URL;
+const apiBaseEl = document.getElementById("apiBase");
+if (apiBaseEl) {
+  apiBaseEl.textContent = API || window.location.origin;
+}
 let HISTORY_CACHE = [];
+let AUTO_RUN_TIMER = null;
+let AUTO_RUN_COUNT = 0;
+let AUTO_RUN_MAX = 0;
 
 function toast(msg){
   const el = document.getElementById("toast");
@@ -333,6 +365,92 @@ function setExample(which){
 
 function setAmount(v){ document.getElementById("wfAmount").value = v; toast("Amount set to " + v); }
 
+function parseUtcTimestamp(ts){
+  if(!ts) return null;
+  const d = new Date(String(ts).replace(" ", "T") + "Z");
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function updateAutomationPanel(items){
+  const now = new Date();
+  const recent = (items || []).slice(0, 20);
+  const inLastMinute = (items || []).filter(it => {
+    const t = parseUtcTimestamp(it.ts);
+    return t && ((now - t) <= 60_000);
+  });
+
+  const latencies = recent
+    .map(it => Number(it.latency_ms))
+    .filter(v => Number.isFinite(v));
+  const avgLatency = latencies.length
+    ? Math.round(latencies.reduce((a,b)=>a+b,0) / latencies.length)
+    : 0;
+
+  const errors = recent.filter(it => {
+    const out = it.output || {};
+    return String(it.kind || "").includes("error") || !!out.error;
+  }).length;
+  const errorRate = recent.length ? Math.round((errors / recent.length) * 100) : 0;
+
+  const workflowRecent = recent.filter(it => String(it.kind || "") === "workflow");
+  const highRiskCount = workflowRecent.filter(it => String(it.output?.risk || "") === "high").length;
+
+  document.getElementById("mRpm").textContent = String(inLastMinute.length);
+  document.getElementById("mLatency").textContent = `${avgLatency} ms`;
+  document.getElementById("mErr").textContent = `${errorRate}%`;
+  document.getElementById("mHigh").textContent = String(highRiskCount);
+
+  const alert = document.getElementById("riskAlert");
+  alert.classList.remove("warn");
+  if(highRiskCount >= 3){
+    alert.classList.add("warn");
+    alert.textContent = `Automation alert: ${highRiskCount} high-risk workflows in the last 20 events.`;
+  } else {
+    alert.textContent = "Automation alert: Normal activity.";
+  }
+}
+
+function updateAutoUi(){
+  const running = !!AUTO_RUN_TIMER;
+  document.getElementById("autoState").textContent = running ? "running" : "off";
+  document.getElementById("autoBtn").textContent = running ? "Stop Auto Run" : "Start Auto Run";
+  document.getElementById("autoCount").textContent = `${AUTO_RUN_COUNT}/${AUTO_RUN_MAX}`;
+}
+
+function stopAutoRun(message){
+  if(!AUTO_RUN_TIMER) return;
+  clearInterval(AUTO_RUN_TIMER);
+  AUTO_RUN_TIMER = null;
+  updateAutoUi();
+  if(message) toast(message);
+}
+
+function toggleAutoRun(){
+  if(AUTO_RUN_TIMER){
+    stopAutoRun("Auto run stopped");
+    return;
+  }
+
+  const every = Math.max(2, Number(document.getElementById("autoEvery").value || 10));
+  AUTO_RUN_MAX = Math.max(1, Number(document.getElementById("autoMax").value || 12));
+  AUTO_RUN_COUNT = 0;
+
+  const tick = () => {
+    runWorkflow({silent:true}).finally(() => {
+      AUTO_RUN_COUNT += 1;
+      updateAutoUi();
+      if(AUTO_RUN_COUNT >= AUTO_RUN_MAX){
+        stopAutoRun("Auto run reached max runs");
+      }
+    });
+  };
+
+  tick();
+  AUTO_RUN_TIMER = setInterval(tick, every * 1000);
+  updateAutoUi();
+  toast(`Auto run started (${every}s, max ${AUTO_RUN_MAX})`);
+}
+
 async function apiHealth(){
   try{
     const t0 = performance.now();
@@ -381,7 +499,8 @@ async function askAI(){
   }
 }
 
-async function runWorkflow(){
+async function runWorkflow(opts = {}){
+  const silent = !!opts.silent;
   setBadge("wfBadge","warn","Running…");
   const t0 = performance.now();
   const user = document.getElementById("wfUser").value || "unknown";
@@ -410,12 +529,12 @@ async function runWorkflow(){
 
     document.getElementById("wfPretty").innerHTML = pretty;
     setBadge("wfBadge", res.ok ? "ok":"bad", res.ok ? "Success" : "Error");
-    toast(res.ok ? "Workflow complete" : "Workflow failed");
+    if(!silent) toast(res.ok ? "Workflow complete" : "Workflow failed");
     refreshHistory();
   } catch(e){
     setBadge("wfBadge","bad","Network error");
     document.getElementById("wfPretty").innerHTML = "<div>Network error: " + escapeHtml(e.message) + "</div>";
-    toast("API not reachable");
+    if(!silent) toast("API not reachable");
   }
 }
 
@@ -427,6 +546,7 @@ async function refreshHistory(){
     const body = await res.json();
     let items = body.items || [];
     HISTORY_CACHE = items;
+    updateAutomationPanel(HISTORY_CACHE);
 
     if(filter === "ask"){
       items = items.filter(it => String(it.kind||"").startsWith("ask"));
@@ -475,17 +595,12 @@ async function refreshHistory(){
 
 async function clearHistory(){
   try{
-    try {
-      const r =   // UI-only clear (backend has no clear endpoint)
-  historyItems = [];
-  renderHistory();
-      if (!r.ok) throw new Error("no clear endpoint");
-    } catch (e) {
-      // fallback: clear only the UI if backend doesn't support clear
-      if (window.__historyRender) window.__historyRender([]);
-    }
+    const r = await fetch(API + "/api/history/clear", { method: "POST" });
+    if (!r.ok) throw new Error("no clear endpoint");
+    HISTORY_CACHE = [];
+    updateAutomationPanel(HISTORY_CACHE);
     toast("History cleared");
-    refreshHistory();
+    await refreshHistory();
   } catch(e){
     toast("Clear failed");
   }
@@ -527,6 +642,7 @@ function copyText(id){
 
 apiHealth();
 refreshHistory();
+updateAutoUi();
 setInterval(apiHealth, 5000);
 setInterval(refreshHistory, 7000);
 </script>

@@ -1,4 +1,5 @@
 ﻿def clear_events():
+    init_db()
     conn = _conn()
     conn.execute("DELETE FROM events")
     conn.commit()
@@ -6,7 +7,7 @@
 import os
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 
 DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data.db"))
 
@@ -32,7 +33,7 @@ def init_db():
 
 def save_event(kind: str, input_data: dict, output_data: dict, latency_ms: int, request_id: str = None):
     init_db()
-    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     with _conn() as conn:
         conn.execute(
             "INSERT INTO events (ts, kind, request_id, latency_ms, input_json, output_json) VALUES (?, ?, ?, ?, ?, ?)",
