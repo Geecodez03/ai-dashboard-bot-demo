@@ -23,6 +23,15 @@ Invoke-RestMethod "$u/api/info"
 Invoke-RestMethod -Method Post -Uri "$u/api/ask" -ContentType "application/json" -Body '{"question":"Give 3 bullets explaining this demo."}'
 ```
 
+## First-time local setup (PowerShell)
+
+```powershell
+python -m venv .venv-local
+.\.venv-local\Scripts\Activate.ps1
+pip install -r backend/requirements.txt
+python -m pytest backend/tests -q
+```
+
 ## Local setup notes
 - Create and use a local virtual environment for development only.
 - Keep environment and cache artifacts out of git (`backend/.venv/`, `.venv-local/`, `__pycache__/`, `.pytest_cache/`).
